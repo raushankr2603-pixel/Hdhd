@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">AetherOS Agent</string>
+    <string name="accessibility_service_description">Allows AetherOS Agent to inspect live screen elements and perform autonomous taps, clicks, scrolls, and multi-step workflows across applications.</string>
+    <string name="nav_live">Live Agent</string>
+    <string name="nav_models">AI Models</string>
+    <string name="nav_workflows">Macros &amp; Agents</string>
+    <string name="nav_ecosystem">Ecosystem</string>
+    <string name="nav_devops">Shell &amp; Git</string>
+    <string name="provider_name_label">Provider Name</string>
+    <string name="base_url_label">Base URL</string>
+    <string name="api_key_label">API Key</string>
+    <string name="model_name_label">Model Name</string>
+    <string name="save_provider">Save AI Provider</string>
+    <string name="offline_mode_label">100% Offline Privacy Mode</string>
+    <string name="e2ee_sync_status">AES-256-GCM End-to-End Encrypted Sync Active</string>
+</resources>

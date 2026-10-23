@@ -1,0 +1,6 @@
+{
+  "name": "AetherOS Agent",
+  "description": "Autonomous voice-first agentic assistant with real-time live audio and screen vision, system and smart home control, multi-provider AI routing, voice macros, GitHub repo tools, and E2EE cross-device sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
