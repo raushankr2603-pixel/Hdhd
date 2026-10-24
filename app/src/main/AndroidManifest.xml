@@ -44,6 +44,9 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Termux External Command Execution Permission (RunCommandService Bridge) -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -54,11 +57,25 @@
         android:name="android.hardware.bluetooth"
         android:required="false" />
 
-    <!-- Package visibility for launching and automating third-party apps -->
+    <!-- Package visibility for launching and automating third-party apps, Termux & sub-dependencies, and OpenClaw channels -->
     <queries>
+        <package android:name="com.termux" />
+        <package android:name="com.termux.api" />
+        <package android:name="com.termux.boot" />
+        <package android:name="com.termux.widget" />
+        <package android:name="com.termux.window" />
+        <package android:name="com.termux.styling" />
+        <package android:name="com.termux.x11" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.Slack" />
+        <package android:name="com.discord" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="com.termux.RUN_COMMAND" />
         </intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />

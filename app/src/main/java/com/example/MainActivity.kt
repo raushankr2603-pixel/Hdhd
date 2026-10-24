@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Hub
@@ -62,6 +63,7 @@ import com.example.ui.screens.AiProvidersScreen
 import com.example.ui.screens.EcosystemSyncScreen
 import com.example.ui.screens.LiveAssistantScreen
 import com.example.ui.screens.MacrosAndAgentsScreen
+import com.example.ui.screens.OpenEcosystemNexusScreen
 import com.example.ui.screens.PermissionsCenterScreen
 import com.example.ui.screens.ShellAndGitHubScreen
 import com.example.ui.theme.CyberCyan
@@ -118,9 +120,9 @@ fun AetherAppRoot(
             AetherNavDestination("live", "Live", Icons.Default.GraphicEq, "nav_tab_live"),
             AetherNavDestination("models", "Models", Icons.Default.Hub, "nav_tab_models"),
             AetherNavDestination("workflows", "Macros", Icons.Default.AccountTree, "nav_tab_workflows"),
+            AetherNavDestination("nexus", "Nexus", Icons.Default.AutoAwesome, "nav_tab_nexus"),
             AetherNavDestination("ecosystem", "Devices", Icons.Default.Devices, "nav_tab_ecosystem"),
-            AetherNavDestination("permissions", "Perms", Icons.Default.Security, "nav_tab_permissions"),
-            AetherNavDestination("shell_git", "Shell", Icons.Default.Terminal, "nav_tab_shell")
+            AetherNavDestination("shell_git", "Termux", Icons.Default.Terminal, "nav_tab_shell")
         )
     }
 
@@ -145,7 +147,7 @@ fun AetherAppRoot(
                                 color = CyberCyan
                             )
                             Text(
-                                text = "Voice, Accessibility Vision, Macros, E2EE & Root Shell",
+                                text = "OpenMuse • AnyClaw • OpenDots • Termux • Live Vision",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = QuantumEmerald
                             )
@@ -153,9 +155,9 @@ fun AetherAppRoot(
                     },
                     actions = {
                         Button(
-                            onClick = { selectedTab = 4 },
+                            onClick = { selectedTab = 6 },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedTab == 4) QuantumEmerald else CyberCyan,
+                                containerColor = if (selectedTab == 6) QuantumEmerald else CyberCyan,
                                 contentColor = Color(0xFF001F24)
                             ),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -245,9 +247,10 @@ fun AetherAppRoot(
                         0 -> LiveAssistantScreen(viewModel = viewModel)
                         1 -> AiProvidersScreen(viewModel = viewModel)
                         2 -> MacrosAndAgentsScreen(viewModel = viewModel)
-                        3 -> EcosystemSyncScreen(viewModel = viewModel)
-                        4 -> PermissionsCenterScreen(viewModel = viewModel)
+                        3 -> OpenEcosystemNexusScreen(viewModel = viewModel)
+                        4 -> EcosystemSyncScreen(viewModel = viewModel)
                         5 -> ShellAndGitHubScreen(viewModel = viewModel)
+                        6 -> PermissionsCenterScreen(viewModel = viewModel)
                     }
                 }
             }

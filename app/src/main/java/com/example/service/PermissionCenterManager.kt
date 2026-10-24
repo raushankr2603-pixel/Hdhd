@@ -302,6 +302,20 @@ class PermissionCenterManager(private val context: Context) {
             )
         )
 
+        // 13. Termux External Command Execution (com.termux.permission.RUN_COMMAND)
+        val termuxGranted = isRuntimePermissionGranted("com.termux.permission.RUN_COMMAND")
+        results.add(
+            CapabilityPermissionStatus(
+                id = "termux_run_command",
+                title = "Termux RunCommandService Bridge (RUN_COMMAND)",
+                subtitle = "Dispatch bash, python, node, git & AnyClaw/OpenClaw commands directly into Termux",
+                permissionName = "com.termux.permission.RUN_COMMAND",
+                kind = PermissionKind.SPECIAL_OS_INTENT,
+                isGranted = termuxGranted,
+                actionButtonText = if (termuxGranted) "Granted" else "Grant Termux Access"
+            )
+        )
+
         return results
     }
 

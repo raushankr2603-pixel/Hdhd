@@ -195,15 +195,69 @@ class ExampleRobolectricTest {
     }
 
     @Test
+    fun verifyOpenMuseAnyClawOpenDotsAndTermuxEcosystem() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val deviceControl = DeviceControlEngine(context)
+        val termuxBridge = com.example.service.TermuxBridgeEngine(context)
+        val openEcosystem = com.example.domain.OpenAgentEcosystemEngine(context, deviceControl, termuxBridge)
+
+        // 1. Verify Termux & 6 Sub-Dependencies Inspection + Real POSIX Script Execution
+        val termuxSnap = termuxBridge.inspectEnvironment()
+        assertEquals(7, termuxSnap.plugins.size)
+        assertTrue(termuxSnap.plugins.any { it.packageName == "com.termux" })
+        assertTrue(termuxSnap.plugins.any { it.packageName == "com.termux.api" })
+        assertTrue(termuxSnap.plugins.any { it.packageName == "com.termux.x11" })
+
+        val savedScript = termuxBridge.saveUserlandScript("test_echo.sh", "#!/system/bin/sh\necho 'AETHER_POSIX_OK'")
+        assertTrue(java.io.File(savedScript.absolutePath).exists())
+
+        val execOutcome = termuxBridge.executeCommand("echo 'TERMUX_USERLAND_VERIFIED'", dispatchToTermuxService = false)
+        assertTrue(execOutcome.stdoutAndStderr.contains("TERMUX_USERLAND_VERIFIED"))
+
+        // 2. Verify OpenClaw / AnyClaw Real On-Disk Workspace Files (MEMORY.md, SOUL.md, TOOLS.md)
+        val workspaceFiles = openEcosystem.listWorkspaceMarkdownFiles()
+        assertTrue(workspaceFiles.any { it.fileName == "MEMORY.md" })
+        assertTrue(workspaceFiles.any { it.fileName == "SOUL.md" })
+        assertTrue(workspaceFiles.any { it.fileName == "TOOLS.md" })
+
+        val updatedMem = openEcosystem.appendFactToMemoryMd("Verified OpenMuse + AnyClaw + OpenDots integration")
+        assertTrue(updatedMem.content.contains("Verified OpenMuse + AnyClaw + OpenDots integration"))
+
+        // 3. Verify OpenDots Specialist Coworker ("Dot") Task Execution & HITL Space Page Persistence on Disk
+        val dot = com.example.data.local.OpenDotsCoworkerEntity(
+            id = 1,
+            dotName = "Atlas • Deep Researcher Dot",
+            roleTitle = "Researcher",
+            systemInstructions = "Draft engineering briefs",
+            sandboxEnvironment = "OpenBot Chromium + Termux",
+            allowedToolsCsv = "BROWSER_DOM,TERMUX_SHELL,SPACES_WRITE",
+            assignedSpaceName = "Engineering & Research"
+        )
+        val draftedPage = openEcosystem.executeOpenDotCoworkerTask(dot, "Verify AG-UI and Termux bridge")
+        assertEquals("PENDING_HITL", draftedPage.approvalStatus)
+        assertTrue(draftedPage.markdownContent.contains("Verify AG-UI and Termux bridge"))
+
+        val diskPath = openEcosystem.writeSpacePageToDisk(draftedPage.copy(approvalStatus = "APPROVED"))
+        assertTrue(java.io.File(diskPath).exists())
+
+        // 4. Verify OpenMuse Manual Takeover Toggle & AG-UI Event Stream
+        openEcosystem.setBrowserManualTakeover(true)
+        assertTrue(openEcosystem.browserState.value.isManualTakeoverActive)
+        assertTrue(openEcosystem.agUiEvents.value.isNotEmpty())
+    }
+
+    @Test
     fun verifyPermissionCenterInspectsAllCapabilities() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val permissionManager = PermissionCenterManager(context)
         val capabilities = permissionManager.inspectAllCapabilities()
-        assertEquals(12, capabilities.size)
+        assertEquals(13, capabilities.size)
         assertTrue(capabilities.any { it.id == "accessibility_service" })
         assertTrue(capabilities.any { it.id == "write_settings" })
         assertTrue(capabilities.any { it.id == "system_overlay" })
         assertTrue(capabilities.any { it.id == "notification_listener" })
+        assertTrue(capabilities.any { it.id == "termux_run_command" })
     }
 }
+
 

@@ -134,4 +134,69 @@ interface AetherDao {
 
     @Query("DELETE FROM shell_history")
     suspend fun clearShellHistory()
+
+    // OpenDots Specialist AI Coworkers ("Dots")
+    @Query("SELECT * FROM opendots_coworkers ORDER BY id ASC")
+    fun observeOpenDotsCoworkers(): Flow<List<OpenDotsCoworkerEntity>>
+
+    @Query("SELECT * FROM opendots_coworkers")
+    suspend fun getAllOpenDotsCoworkersOnce(): List<OpenDotsCoworkerEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOpenDotsCoworker(coworker: OpenDotsCoworkerEntity): Long
+
+    @Update
+    suspend fun updateOpenDotsCoworker(coworker: OpenDotsCoworkerEntity)
+
+    @Query("DELETE FROM opendots_coworkers WHERE id = :id")
+    suspend fun deleteOpenDotsCoworker(id: Int)
+
+    // OpenDots Spaces & Pages (with Human-in-the-Loop Approval Gates)
+    @Query("SELECT * FROM opendots_space_pages ORDER BY CASE WHEN approvalStatus = 'PENDING_HITL' THEN 0 ELSE 1 END, updatedAt DESC")
+    fun observeOpenDotsSpacePages(): Flow<List<OpenDotsSpacePageEntity>>
+
+    @Query("SELECT * FROM opendots_space_pages")
+    suspend fun getAllOpenDotsSpacePagesOnce(): List<OpenDotsSpacePageEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOpenDotsSpacePage(page: OpenDotsSpacePageEntity): Long
+
+    @Update
+    suspend fun updateOpenDotsSpacePage(page: OpenDotsSpacePageEntity)
+
+    @Query("DELETE FROM opendots_space_pages WHERE id = :id")
+    suspend fun deleteOpenDotsSpacePage(id: Int)
+
+    // AnyClaw / OpenClaw ClawHub Skills, MCP Tools & OpenMuse Self-Improving Skills
+    @Query("SELECT * FROM claw_skills ORDER BY isApproved ASC, usageCount DESC, id ASC")
+    fun observeClawSkills(): Flow<List<ClawSkillEntity>>
+
+    @Query("SELECT * FROM claw_skills")
+    suspend fun getAllClawSkillsOnce(): List<ClawSkillEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertClawSkill(skill: ClawSkillEntity): Long
+
+    @Update
+    suspend fun updateClawSkill(skill: ClawSkillEntity)
+
+    @Query("DELETE FROM claw_skills WHERE id = :id")
+    suspend fun deleteClawSkill(id: Int)
+
+    // OpenClaw Multi-Channel Gateway Connectors
+    @Query("SELECT * FROM claw_gateway_channels ORDER BY id ASC")
+    fun observeClawGatewayChannels(): Flow<List<ClawGatewayChannelEntity>>
+
+    @Query("SELECT * FROM claw_gateway_channels")
+    suspend fun getAllClawGatewayChannelsOnce(): List<ClawGatewayChannelEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertClawGatewayChannel(channel: ClawGatewayChannelEntity): Long
+
+    @Update
+    suspend fun updateClawGatewayChannel(channel: ClawGatewayChannelEntity)
+
+    @Query("DELETE FROM claw_gateway_channels WHERE id = :id")
+    suspend fun deleteClawGatewayChannel(id: Int)
 }
+

@@ -65,6 +65,8 @@ fun ShellAndGitHubScreen(
     val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
     val shellHistory by viewModel.shellHistory.collectAsStateWithLifecycle()
     val githubRepos by viewModel.githubRepos.collectAsStateWithLifecycle()
+    val termuxEnv by viewModel.termuxEnvironment.collectAsStateWithLifecycle()
+    val lastTermuxOutcome by viewModel.lastTermuxOutcome.collectAsStateWithLifecycle()
 
     var shellCommand by remember { mutableStateOf("") }
     var executeAsRoot by remember { mutableStateOf(true) }
@@ -336,10 +338,38 @@ fun ShellAndGitHubScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val presetRepos = listOf(
+                            "CopilotKit/OpenMuse",
+                            "openclaw/openclaw",
+                            "fastclaw-ai/anyclaw",
+                            "CopilotKit/OpenDots",
+                            "termux/termux-app",
+                            "termux/termux-api",
+                            "ollama/ollama"
+                        )
+                        presetRepos.forEach { slug ->
+                            AssistChip(
+                                onClick = {
+                                    repoInput = slug
+                                    viewModel.addGitHubRepository(slug, repoHook)
+                                },
+                                label = { Text(slug, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = repoInput,
                         onValueChange = { repoInput = it },
-                        label = { Text("GitHub Repository (e.g. ollama/ollama or langchain-ai/langchain)") },
+                        label = { Text("GitHub Repository (e.g. CopilotKit/OpenMuse or openclaw/openclaw)") },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -428,5 +458,15 @@ fun ShellAndGitHubScreen(
                 }
             }
         }
+
+        // 4. Full Termux & Sub-Dependencies Console
+        item {
+            TermuxAndSubDependenciesSection(
+                viewModel = viewModel,
+                termuxEnv = termuxEnv,
+                lastTermuxOutcome = lastTermuxOutcome
+            )
+        }
     }
 }
+

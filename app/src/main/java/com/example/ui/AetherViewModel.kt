@@ -7,22 +7,30 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AetherDatabase
 import com.example.data.local.AiProviderEntity
+import com.example.data.local.ClawGatewayChannelEntity
+import com.example.data.local.ClawSkillEntity
 import com.example.data.local.GitHubRepoEntity
+import com.example.data.local.OpenDotsCoworkerEntity
+import com.example.data.local.OpenDotsSpacePageEntity
 import com.example.data.local.ShellHistoryEntity
 import com.example.data.local.SmartDeviceEntity
 import com.example.data.local.SubAgentEntity
 import com.example.data.local.VoiceMacroEntity
 import com.example.data.security.E2EEVault
+import com.example.domain.AgUiProtocolEvent
 import com.example.domain.AiRouterEngine
 import com.example.domain.AutonomousMacroRunState
+import com.example.domain.BrowserDomInspectionResult
 import com.example.domain.CommandExecutionStatus
 import com.example.domain.IntentCategory
 import com.example.domain.MacroActionStep
 import com.example.domain.MacroSequenceCodec
 import com.example.domain.MacroStepExecutionLog
+import com.example.domain.OpenAgentEcosystemEngine
 import com.example.domain.StepRunState
 import com.example.domain.VoiceLiveManager
 import com.example.domain.VoiceProcessingReport
+import com.example.domain.WorkspaceMarkdownFile
 import com.example.service.AetherAccessibilityService
 import com.example.service.AetherLiveForegroundService
 import com.example.service.AetherNotificationListenerService
@@ -33,6 +41,9 @@ import com.example.service.InstalledAppInfo
 import com.example.service.PermissionCenterManager
 import com.example.service.ScreenVisionSnapshot
 import com.example.service.SystemDiagnosticsSnapshot
+import com.example.service.TermuxBridgeEngine
+import com.example.service.TermuxEnvironmentSnapshot
+import com.example.service.TermuxExecutionOutcome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +74,8 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
     val macroRepository = com.example.data.repository.VoiceMacroRepository(dao)
     val deviceControl = DeviceControlEngine(application)
     val permissionCenter = PermissionCenterManager(application)
+    val termuxBridge = TermuxBridgeEngine(application)
+    val openEcosystem = OpenAgentEcosystemEngine(application, deviceControl, termuxBridge)
     private val aiRouter = AiRouterEngine(deviceControl)
 
     val voiceManager = VoiceLiveManager(application) { spokenText, confidence ->
@@ -90,6 +103,33 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
 
     val shellHistory: StateFlow<List<ShellHistoryEntity>> = dao.observeShellHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val openDotsCoworkers: StateFlow<List<OpenDotsCoworkerEntity>> = dao.observeOpenDotsCoworkers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val openDotsSpacePages: StateFlow<List<OpenDotsSpacePageEntity>> = dao.observeOpenDotsSpacePages()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val clawSkills: StateFlow<List<ClawSkillEntity>> = dao.observeClawSkills()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val clawGatewayChannels: StateFlow<List<ClawGatewayChannelEntity>> = dao.observeClawGatewayChannels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val agUiEvents: StateFlow<List<AgUiProtocolEvent>> = openEcosystem.agUiEvents
+    val browserState: StateFlow<BrowserDomInspectionResult> = openEcosystem.browserState
+
+    private val _workspaceFiles = MutableStateFlow(openEcosystem.listWorkspaceMarkdownFiles())
+    val workspaceFiles: StateFlow<List<WorkspaceMarkdownFile>> = _workspaceFiles.asStateFlow()
+
+    private val _termuxEnvironment = MutableStateFlow(termuxBridge.inspectEnvironment())
+    val termuxEnvironment: StateFlow<TermuxEnvironmentSnapshot> = _termuxEnvironment.asStateFlow()
+
+    private val _lastTermuxOutcome = MutableStateFlow<TermuxExecutionOutcome?>(null)
+    val lastTermuxOutcome: StateFlow<TermuxExecutionOutcome?> = _lastTermuxOutcome.asStateFlow()
+
+    private val _lastMcpResponse = MutableStateFlow<String?>(null)
+    val lastMcpResponse: StateFlow<String?> = _lastMcpResponse.asStateFlow()
 
     val screenVision: StateFlow<ScreenVisionSnapshot> = AetherAccessibilityService.activeSnapshot
     val capturedNotifications: StateFlow<List<CapturedNotificationItem>> = AetherNotificationListenerService.capturedNotifications
@@ -887,6 +927,387 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteGitHubRepo(id: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deleteGitHubRepo(id)
+        }
+    }
+
+    // =========================================================================
+    // OPENMUSE, ANYCLAW, OPENCLAW, OPENDOTS & TERMUX ECOSYSTEM ACTIONS
+    // =========================================================================
+
+    fun refreshTermuxAndWorkspaceState() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _termuxEnvironment.value = termuxBridge.inspectEnvironment()
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            refreshPermissionsStatus()
+        }
+    }
+
+    fun executeTermuxBridgeCommand(command: String, dispatchToTermuxApp: Boolean = true) {
+        val clean = command.trim()
+        if (clean.isEmpty()) {
+            postToast("Enter a Termux or POSIX command first")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val outcome = termuxBridge.executeCommand(clean, dispatchToTermuxService = dispatchToTermuxApp)
+            _lastTermuxOutcome.value = outcome
+            dao.insertShellEntry(
+                ShellHistoryEntity(
+                    command = "[${outcome.executionMode}] $clean",
+                    output = outcome.stdoutAndStderr,
+                    isRootAttempt = false,
+                    exitCode = outcome.exitCode
+                )
+            )
+            openEcosystem.emitAgUiEvent(
+                eventType = "TOOL_CALL_RESULT",
+                sourceAgent = "TermuxBridgeEngine",
+                summary = "Executed '$clean' (Exit ${outcome.exitCode}, ${outcome.elapsedMs}ms)",
+                jsonPayload = JSONObject()
+                    .put("cmd", clean)
+                    .put("mode", outcome.executionMode)
+                    .put("exitCode", outcome.exitCode)
+                    .toString()
+            )
+            _termuxEnvironment.value = termuxBridge.inspectEnvironment()
+            postToast("Termux/POSIX executed (${outcome.elapsedMs}ms, exit ${outcome.exitCode})")
+        }
+    }
+
+    fun saveAndExecuteTermuxScript(fileName: String, scriptContent: String, runImmediately: Boolean = true) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val script = termuxBridge.saveUserlandScript(fileName, scriptContent)
+            _termuxEnvironment.value = termuxBridge.inspectEnvironment()
+            if (runImmediately) {
+                val outcome = termuxBridge.executeCommand("sh \"${script.absolutePath}\"", dispatchToTermuxService = true)
+                _lastTermuxOutcome.value = outcome
+                dao.insertShellEntry(
+                    ShellHistoryEntity(
+                        command = "script:${script.fileName}",
+                        output = outcome.stdoutAndStderr,
+                        isRootAttempt = false,
+                        exitCode = outcome.exitCode
+                    )
+                )
+                postToast("Saved & executed ${script.fileName} (exit ${outcome.exitCode})")
+            } else {
+                postToast("Saved executable script: ${script.fileName}")
+            }
+        }
+    }
+
+    fun deleteTermuxScript(fileName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            termuxBridge.deleteUserlandScript(fileName)
+            _termuxEnvironment.value = termuxBridge.inspectEnvironment()
+            postToast("Deleted script $fileName")
+        }
+    }
+
+    fun copyTermuxBootstrapToClipboard(bootstrapType: String) {
+        val copied = termuxBridge.copyBootstrapCommandToClipboard(bootstrapType)
+        postToast("Copied to Clipboard: $copied")
+    }
+
+    fun launchTermuxOrAppSettings() {
+        val msg = termuxBridge.launchTermuxOrSettings()
+        postToast(msg)
+    }
+
+    // OpenMuse Browser Worker & Manual Takeover ("Take Control")
+    fun inspectUrlWithOpenMuseWorker(url: String) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            val res = openEcosystem.inspectUrlDomHeadless(url)
+            postToast("OpenMuse DOM: ${res.pageTitle} (${res.interactiveElements.size} targets)")
+        }
+    }
+
+    fun onWebViewDomExtracted(url: String, title: String, domElementsJson: String) {
+        openEcosystem.updateBrowserDomFromWebView(url, title, domElementsJson)
+    }
+
+    fun toggleBrowserManualTakeover(enabled: Boolean) {
+        openEcosystem.setBrowserManualTakeover(enabled)
+        postToast(
+            if (enabled) "Manual Takeover ACTIVE: You now directly control the Browser Worker"
+            else "Autonomous OpenMuse Browser Worker Control Resumed"
+        )
+    }
+
+    // OpenClaw / AnyClaw Workspace Files (MEMORY.md, SOUL.md, TOOLS.md)
+    fun saveWorkspaceMarkdown(fileName: String, content: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            openEcosystem.saveWorkspaceMarkdownFile(fileName, content)
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("Saved $fileName to on-device OpenClaw workspace")
+        }
+    }
+
+    fun appendFactToMemoryMd(fact: String) {
+        if (fact.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            openEcosystem.appendFactToMemoryMd(fact)
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("Appended fact to MEMORY.md")
+        }
+    }
+
+    // OpenDots Specialist Coworkers ("Dots") & Spaces/Pages HITL Approval Gate
+    fun createOpenDotsCoworker(
+        dotName: String,
+        roleTitle: String,
+        instructions: String,
+        sandboxEnv: String,
+        allowedToolsCsv: String,
+        assignedSpace: String
+    ) {
+        if (dotName.isBlank()) {
+            postToast("Enter a Dot Coworker name")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertOpenDotsCoworker(
+                OpenDotsCoworkerEntity(
+                    dotName = dotName.trim(),
+                    roleTitle = roleTitle.ifBlank { "Autonomous Workspace Specialist" },
+                    systemInstructions = instructions.ifBlank { "Execute tasks and draft pages with HITL checkpoints." },
+                    sandboxEnvironment = sandboxEnv.ifBlank { "OpenBot Chromium + Termux Sandbox" },
+                    allowedToolsCsv = allowedToolsCsv.ifBlank { "BROWSER_DOM,TERMUX_SHELL,SPACES_WRITE" },
+                    assignedSpaceName = assignedSpace.ifBlank { "Engineering & Research" },
+                    status = "READY"
+                )
+            )
+            postToast("Deployed OpenDots Coworker: ${dotName.trim()}")
+        }
+    }
+
+    fun runOpenDotsCoworkerTask(coworker: OpenDotsCoworkerEntity, taskPrompt: String) {
+        viewModelScope.launch {
+            dao.updateOpenDotsCoworker(coworker.copy(status = "WORKING"))
+            val draftedPage = openEcosystem.executeOpenDotCoworkerTask(coworker, taskPrompt)
+            dao.insertOpenDotsSpacePage(draftedPage)
+            dao.updateOpenDotsCoworker(
+                coworker.copy(
+                    status = "AWAITING_HITL",
+                    lastOutputSummary = "Drafted '${draftedPage.pageTitle}' (Awaiting HITL Approval)"
+                )
+            )
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("${coworker.dotName} drafted page in '${draftedPage.spaceName}' — Approve in Spaces!")
+        }
+    }
+
+    fun deleteOpenDotsCoworker(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteOpenDotsCoworker(id)
+        }
+    }
+
+    fun approveOpenDotsSpacePage(page: OpenDotsSpacePageEntity, updatedMarkdown: String? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val finalPage = page.copy(
+                markdownContent = updatedMarkdown ?: page.markdownContent,
+                approvalStatus = "APPROVED",
+                versionNumber = page.versionNumber + 1,
+                updatedAt = System.currentTimeMillis()
+            )
+            val diskPath = openEcosystem.writeSpacePageToDisk(finalPage)
+            dao.updateOpenDotsSpacePage(finalPage.copy(filePathOnDisk = diskPath))
+            // Also update the authoring Dot's completed page count
+            val dot = openDotsCoworkers.value.firstOrNull { it.dotName == page.authoredByDot }
+            if (dot != null) {
+                dao.updateOpenDotsCoworker(
+                    dot.copy(
+                        status = "READY",
+                        completedPagesCount = dot.completedPagesCount + 1,
+                        lastOutputSummary = "Committed '${finalPage.pageTitle}' to disk"
+                    )
+                )
+            }
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("HITL Approved & written to disk: $diskPath")
+        }
+    }
+
+    fun rejectOpenDotsSpacePage(page: OpenDotsSpacePageEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.updateOpenDotsSpacePage(
+                page.copy(
+                    approvalStatus = "REJECTED",
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            openEcosystem.emitAgUiEvent(
+                eventType = "HITL_CHECKPOINT",
+                sourceAgent = "OpenDots HITL Gate",
+                summary = "REJECTED Space Page '${page.pageTitle}'",
+                jsonPayload = JSONObject().put("pageId", page.id).put("status", "REJECTED").toString()
+            )
+            postToast("Rejected draft '${page.pageTitle}'")
+        }
+    }
+
+    fun createOrUpdateOpenDotsSpacePage(
+        spaceName: String,
+        pageTitle: String,
+        markdownContent: String,
+        commitImmediately: Boolean = true
+    ) {
+        if (pageTitle.isBlank()) {
+            postToast("Enter a page title")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val entity = OpenDotsSpacePageEntity(
+                spaceName = spaceName.ifBlank { "Engineering & Research" },
+                pageTitle = pageTitle.trim(),
+                markdownContent = markdownContent.ifBlank { "# ${pageTitle.trim()}\n" },
+                authoredByDot = if (commitImmediately) "Operator Direct Commit" else "Dot Draft",
+                approvalStatus = if (commitImmediately) "APPROVED" else "PENDING_HITL"
+            )
+            val diskPath = if (commitImmediately) openEcosystem.writeSpacePageToDisk(entity) else ""
+            dao.insertOpenDotsSpacePage(entity.copy(filePathOnDisk = diskPath))
+            postToast("Saved page '${pageTitle.trim()}' in Space '${entity.spaceName}'")
+        }
+    }
+
+    fun deleteOpenDotsSpacePage(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteOpenDotsSpacePage(id)
+        }
+    }
+
+    // ClawHub Skills, MCP JSON-RPC 2.0 & OpenMuse Self-Improving Skills
+    fun runClawSkill(skill: ClawSkillEntity) {
+        if (!skill.isApproved) {
+            postToast("Approve this OpenMuse Self-Improving Skill first before execution!")
+            return
+        }
+        viewModelScope.launch {
+            val out = openEcosystem.executeClawSkill(skill)
+            dao.updateClawSkill(
+                skill.copy(
+                    usageCount = skill.usageCount + 1,
+                    lastResultLog = out.take(280),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("Executed Skill: ${skill.title}")
+        }
+    }
+
+    fun approveClawSkill(skill: ClawSkillEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.updateClawSkill(
+                skill.copy(
+                    isApproved = true,
+                    lastResultLog = "Approved by operator via HITL gate — Ready for execution",
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            openEcosystem.emitAgUiEvent(
+                eventType = "STATE_DELTA",
+                sourceAgent = "OpenMuse Self-Improving Skills",
+                summary = "Approved & ingested skill '${skill.title}'",
+                jsonPayload = JSONObject().put("skillKey", skill.skillKey).put("approved", true).toString()
+            )
+            postToast("Approved skill: ${skill.title}")
+        }
+    }
+
+    fun proposeSelfImprovingSkill(contextTopic: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val proposal = openEcosystem.synthesizeSelfImprovingSkillProposal(contextTopic)
+            dao.insertClawSkill(proposal)
+            postToast("OpenMuse proposed new Self-Improving Skill (Awaiting your approval)")
+        }
+    }
+
+    fun createCustomClawSkill(
+        title: String,
+        source: String,
+        description: String,
+        executablePayload: String
+    ) {
+        if (title.isBlank() || executablePayload.isBlank()) {
+            postToast("Enter skill title and shell/MCP payload")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val key = title.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+            dao.insertClawSkill(
+                ClawSkillEntity(
+                    skillKey = key.ifEmpty { "custom_skill_${System.currentTimeMillis() % 1000}" },
+                    title = title.trim(),
+                    ecosystemSource = source.ifBlank { "ANYCLAW_CLI" },
+                    description = description.ifBlank { "Custom user-authored AnyClaw/OpenClaw skill" },
+                    executablePayload = executablePayload.trim(),
+                    isApproved = true
+                )
+            )
+            postToast("Registered Skill: ${title.trim()}")
+        }
+    }
+
+    fun deleteClawSkill(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteClawSkill(id)
+        }
+    }
+
+    fun invokeMcpToolOrServer(methodOrTool: String, endpointOrArgs: String) {
+        viewModelScope.launch {
+            val res = openEcosystem.executeLocalOrRemoteMcpTool(methodOrTool, endpointOrArgs)
+            _lastMcpResponse.value = res
+            _workspaceFiles.value = openEcosystem.listWorkspaceMarkdownFiles()
+            postToast("MCP Response received (${res.length} chars)")
+        }
+    }
+
+    // OpenClaw Multi-Channel Gateway
+    fun sendGatewayChannelTestMessage(channel: ClawGatewayChannelEntity, messageText: String) {
+        viewModelScope.launch {
+            val (ok, status) = openEcosystem.dispatchGatewayChannelMessage(channel, messageText)
+            dao.updateClawGatewayChannel(
+                channel.copy(
+                    messagesRoutedCount = channel.messagesRoutedCount + 1,
+                    lastEventStatus = status
+                )
+            )
+            postToast("${channel.channelName}: $status")
+        }
+    }
+
+    fun saveGatewayChannel(
+        channelType: String,
+        channelName: String,
+        endpointUrl: String,
+        rawToken: String
+    ) {
+        if (channelName.isBlank() || endpointUrl.isBlank()) {
+            postToast("Enter channel name and webhook/bot endpoint URL")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.insertClawGatewayChannel(
+                ClawGatewayChannelEntity(
+                    channelType = channelType.uppercase(),
+                    channelName = channelName.trim(),
+                    endpointOrBotUrl = endpointUrl.trim(),
+                    encryptedToken = if (rawToken.isNotBlank()) E2EEVault.encrypt(rawToken.trim()) else "",
+                    isEnabled = true,
+                    lastEventStatus = "Configured & Ready"
+                )
+            )
+            postToast("Saved Gateway Channel: ${channelName.trim()}")
+        }
+    }
+
+    fun deleteGatewayChannel(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteClawGatewayChannel(id)
         }
     }
 

@@ -127,3 +127,70 @@ data class ShellHistoryEntity(
     val exitCode: Int = 0,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+/**
+ * OpenDots Specialist AI Coworker ("Dot") with bounded permissions, role instructions, and sandboxed OpenBot/Termux environment.
+ */
+@Entity(tableName = "opendots_coworkers")
+data class OpenDotsCoworkerEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val dotName: String,
+    val roleTitle: String,
+    val systemInstructions: String,
+    val sandboxEnvironment: String, // e.g. "OpenBot Chromium + Termux Linux Sandbox"
+    val allowedToolsCsv: String, // e.g. "BROWSER_DOM,TERMUX_SHELL,SPACES_WRITE,GITHUB_MCP"
+    val assignedSpaceName: String = "Engineering & Research",
+    val status: String = "READY", // "READY", "WORKING", "AWAITING_HITL"
+    val completedPagesCount: Int = 0,
+    val lastOutputSummary: String = "Ready for autonomous workspace assignment",
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * OpenDots Workspace Document ("Space & Page") with Human-in-the-Loop (HITL) approval gate and on-disk Markdown persistence.
+ */
+@Entity(tableName = "opendots_space_pages")
+data class OpenDotsSpacePageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val spaceName: String,
+    val pageTitle: String,
+    val markdownContent: String,
+    val authoredByDot: String,
+    val approvalStatus: String = "PENDING_HITL", // "PENDING_HITL", "APPROVED", "REJECTED"
+    val filePathOnDisk: String = "",
+    val versionNumber: Int = 1,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * AnyClaw / OpenClaw ClawHub Skill, MCP Tool Binding, or OpenMuse Self-Improving Skill Proposal.
+ */
+@Entity(tableName = "claw_skills")
+data class ClawSkillEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val skillKey: String,
+    val title: String,
+    val ecosystemSource: String, // "ANYCLAW_CLI", "OPENCLAW_MCP", "OPENMUSE_SELF_IMPROVED", "TERMUX_BRIDGE"
+    val description: String,
+    val executablePayload: String, // Shell script, MCP JSON-RPC method, or DOM action sequence
+    val isApproved: Boolean = true, // False when proposed by OpenMuse Self-Improving Skills until user approves
+    val usageCount: Int = 0,
+    val lastResultLog: String = "Idle",
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * OpenClaw Multi-Channel Gateway Connector (Telegram, Discord, Slack, WhatsApp, WebChat SSE, AG-UI Stream).
+ */
+@Entity(tableName = "claw_gateway_channels")
+data class ClawGatewayChannelEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val channelType: String, // "TELEGRAM", "DISCORD", "SLACK", "WHATSAPP", "WEBCHAT_AG_UI"
+    val channelName: String,
+    val endpointOrBotUrl: String,
+    val encryptedToken: String = "",
+    val isEnabled: Boolean = true,
+    val messagesRoutedCount: Int = 0,
+    val lastEventStatus: String = "Gateway Standby"
+)
+

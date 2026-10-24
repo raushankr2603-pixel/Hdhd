@@ -15,9 +15,13 @@ import com.example.domain.MacroSequenceCodec
         SmartDeviceEntity::class,
         SubAgentEntity::class,
         GitHubRepoEntity::class,
-        ShellHistoryEntity::class
+        ShellHistoryEntity::class,
+        OpenDotsCoworkerEntity::class,
+        OpenDotsSpacePageEntity::class,
+        ClawSkillEntity::class,
+        ClawGatewayChannelEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AetherDatabase : RoomDatabase() {
@@ -240,16 +244,235 @@ abstract class AetherDatabase : RoomDatabase() {
                 )
             }
 
-            if (dao.getAllGitHubReposOnce().isEmpty()) {
-                dao.insertGitHubRepo(
+            val existingRepos = dao.getAllGitHubReposOnce()
+            if (existingRepos.isEmpty() || existingRepos.none { it.ownerRepo.contains("OpenMuse", ignoreCase = true) }) {
+                val coreRepos = listOf(
+                    GitHubRepoEntity(
+                        ownerRepo = "CopilotKit/OpenMuse",
+                        description = "Open-source personal AI agent template with AG-UI streaming, persistent Chromium browser worker, Manual Takeover ('Take Control'), and self-improving skills.",
+                        defaultBranch = "main",
+                        starsCount = 6840,
+                        openIssuesCount = 42,
+                        language = "TypeScript / React Native",
+                        automationHook = "AG-UI Event Stream + Persistent Browser Worker & Manual Takeover"
+                    ),
+                    GitHubRepoEntity(
+                        ownerRepo = "openclaw/openclaw",
+                        description = "Self-hosted autonomous AI agent gateway with persistent MEMORY.md & SOUL.md workspace files, ClawHub skills, MCP server bridge, and multi-channel messaging.",
+                        defaultBranch = "main",
+                        starsCount = 148200,
+                        openIssuesCount = 610,
+                        language = "TypeScript / Node.js",
+                        automationHook = "MEMORY.md + SOUL.md Sync, ClawHub Skills & Multi-Channel Gateway"
+                    ),
+                    GitHubRepoEntity(
+                        ownerRepo = "fastclaw-ai/anyclaw",
+                        description = "Android mobile adaptation & CLI wrapper packaging OpenClaw + coding agents, MCP bridges, and local Linux/Termux userland execution on Android without PC.",
+                        defaultBranch = "main",
+                        starsCount = 9420,
+                        openIssuesCount = 38,
+                        language = "Kotlin / Shell / Node.js",
+                        automationHook = "Termux RUN_COMMAND Bridge & Local Android Userland Executor"
+                    ),
+                    GitHubRepoEntity(
+                        ownerRepo = "CopilotKit/OpenDots",
+                        description = "Self-hosted multi-agent workspace with specialist AI Coworkers ('Dots'), OpenBot sandboxes, Spaces & Pages markdown workspace, and Human-in-the-Loop (HITL) approval gates.",
+                        defaultBranch = "main",
+                        starsCount = 7390,
+                        openIssuesCount = 31,
+                        language = "TypeScript / TanStack AI",
+                        automationHook = "Specialist Dots Dispatcher + Spaces & Pages HITL Approval Gate"
+                    ),
+                    GitHubRepoEntity(
+                        ownerRepo = "termux/termux-app",
+                        description = "Android terminal emulator and Linux environment app with RunCommandService external execution bridge, pkg bootstrap, Termux:API, Termux:Boot, Termux:Widget & X11.",
+                        defaultBranch = "master",
+                        starsCount = 41500,
+                        openIssuesCount = 290,
+                        language = "Java / C / Shell",
+                        automationHook = "com.termux.RUN_COMMAND Service Bridge & Sub-Dependencies Manager"
+                    ),
                     GitHubRepoEntity(
                         ownerRepo = "ollama/ollama",
-                        description = "Get up and running with Llama 3.3, DeepSeek-R1, Phi-4, Gemma 3, and other large language models locally.",
+                        description = "Get up and running with Llama 3.3, DeepSeek-R1, Phi-4, Gemma 3, and Qwen 2.5 Coder locally.",
                         defaultBranch = "main",
                         starsCount = 115400,
                         openIssuesCount = 840,
                         language = "Go",
                         automationHook = "Local Model Sync & Runner"
+                    )
+                )
+                coreRepos.forEach { repo ->
+                    if (existingRepos.none { it.ownerRepo.equals(repo.ownerRepo, ignoreCase = true) }) {
+                        dao.insertGitHubRepo(repo)
+                    }
+                }
+            }
+
+            if (dao.getAllOpenDotsCoworkersOnce().isEmpty()) {
+                dao.insertOpenDotsCoworker(
+                    OpenDotsCoworkerEntity(
+                        dotName = "Atlas • Deep Researcher Dot",
+                        roleTitle = "Autonomous Web & Repository Intelligence Specialist",
+                        systemInstructions = "Inspect web DOMs via OpenMuse Browser Worker, synthesize technical architectures, and draft structured briefs into the Engineering & Research Space with citations.",
+                        sandboxEnvironment = "OpenBot Chromium Profile + AG-UI Stream",
+                        allowedToolsCsv = "BROWSER_DOM,SPACES_WRITE,GITHUB_API,MEMORY_MD",
+                        assignedSpaceName = "Engineering & Research",
+                        status = "READY",
+                        completedPagesCount = 3,
+                        lastOutputSummary = "Authored 'OpenMuse, AnyClaw & OpenDots Unified Architecture' brief"
+                    )
+                )
+                dao.insertOpenDotsCoworker(
+                    OpenDotsCoworkerEntity(
+                        dotName = "Forge • Full-Stack & Termux Coder Dot",
+                        roleTitle = "Android, POSIX Shell & Termux Automation Engineer",
+                        systemInstructions = "Write and execute real POSIX shell, Python, and Node.js scripts inside the Termux RunCommandService bridge and local Linux userland. Propose reusable ClawHub skills.",
+                        sandboxEnvironment = "Termux /data/data/com.termux/files/home + Local Userland",
+                        allowedToolsCsv = "TERMUX_RUN_COMMAND,LOCAL_SHELL,SKILL_BUILDER,SPACES_WRITE",
+                        assignedSpaceName = "DevOps & Termux Runbooks",
+                        status = "READY",
+                        completedPagesCount = 2,
+                        lastOutputSummary = "Verified Termux sub-dependencies & POSIX environment variables"
+                    )
+                )
+                dao.insertOpenDotsCoworker(
+                    OpenDotsCoworkerEntity(
+                        dotName = "Sentinel • Security & HITL Auditor Dot",
+                        roleTitle = "Zero-Trust Permission, E2EE & Accessibility Policy Guard",
+                        systemInstructions = "Audit Android Accessibility actions, Termux external commands, and MCP tool calls. Enforce Human-in-the-Loop (HITL) approval gates before committing system changes.",
+                        sandboxEnvironment = "Zero-Trust E2EE Vault + Permission Inspector",
+                        allowedToolsCsv = "PERMISSION_AUDIT,E2EE_VAULT,ACCESSIBILITY_INSPECT,HITL_GATE",
+                        assignedSpaceName = "Security & Compliance",
+                        status = "READY",
+                        completedPagesCount = 1,
+                        lastOutputSummary = "All non-read-only Spaces writes gated by HITL approval"
+                    )
+                )
+            }
+
+            if (dao.getAllOpenDotsSpacePagesOnce().isEmpty()) {
+                dao.insertOpenDotsSpacePage(
+                    OpenDotsSpacePageEntity(
+                        spaceName = "Engineering & Research",
+                        pageTitle = "OpenMuse + AnyClaw + OpenDots + Termux Master Blueprint",
+                        markdownContent = """
+# Unified Agentic Architecture Blueprint
+- **OpenMuse (`CopilotKit/OpenMuse`)**: Event-driven **AG-UI Protocol** (`RUN_STARTED`, `TOOL_CALL_START`, `HITL_CHECKPOINT`, `STATE_DELTA`), Persistent Browser Worker with **Manual Takeover ("Take Control")**, and Self-Improving Skills.
+- **AnyClaw & OpenClaw (`openclaw/openclaw` & `fastclaw-ai/anyclaw`)**: Persistent on-disk workspace memory (`MEMORY.md`, `SOUL.md`, `TOOLS.md`), **ClawHub Skills**, **MCP JSON-RPC 2.0 Server Bridge**, and Multi-Channel Gateway (Telegram, Discord, Slack, WhatsApp, WebChat).
+- **OpenDots (`CopilotKit/OpenDots`)**: Specialist AI Coworkers (**Dots**) operating inside isolated sandboxes and authoring collaborative markdown documents in **Spaces & Pages** protected by **Human-in-the-Loop (HITL) Approval Gates**.
+- **Termux (`termux/termux-app`)**: Native `com.termux.RUN_COMMAND` intent bridge to `com.termux.app.RunCommandService` + local POSIX userland script runner and sub-dependency inspector (`Termux:API`, `Termux:Boot`, `Termux:Widget`, `Termux:Float`, `Termux:Styling`, `Termux:X11`).
+                        """.trimIndent(),
+                        authoredByDot = "Atlas • Deep Researcher Dot",
+                        approvalStatus = "APPROVED",
+                        versionNumber = 1
+                    )
+                )
+                dao.insertOpenDotsSpacePage(
+                    OpenDotsSpacePageEntity(
+                        spaceName = "DevOps & Termux Runbooks",
+                        pageTitle = "Automated Termux + AnyClaw Node Bootstrap Runbook",
+                        markdownContent = """
+# Termux & AnyClaw Environment Bootstrap
+1. Enable external app execution inside `~/.termux/termux.properties`:
+   `allow-external-apps=true`
+2. Bootstrap core packages in Termux:
+   `pkg update -y && pkg install -y git nodejs python clang curl openssh ffmpeg termux-api proot-distro`
+3. Verify local workspace files (`MEMORY.md` & `SOUL.md`) and MCP tool bindings.
+                        """.trimIndent(),
+                        authoredByDot = "Forge • Full-Stack & Termux Coder Dot",
+                        approvalStatus = "PENDING_HITL",
+                        versionNumber = 1
+                    )
+                )
+            }
+
+            if (dao.getAllClawSkillsOnce().isEmpty()) {
+                dao.insertClawSkill(
+                    ClawSkillEntity(
+                        skillKey = "anyclaw_sys_snapshot",
+                        title = "AnyClaw Kernel, CPU, Memory & Mount Snapshot",
+                        ecosystemSource = "ANYCLAW_CLI",
+                        description = "Executes real POSIX telemetry inspection across /proc/version, /proc/meminfo, df -h, and active process tree.",
+                        executablePayload = "uname -a && head -n 5 /proc/meminfo && df -h | head -n 6",
+                        isApproved = true,
+                        usageCount = 4
+                    )
+                )
+                dao.insertClawSkill(
+                    ClawSkillEntity(
+                        skillKey = "termux_env_doctor",
+                        title = "Termux Sub-Dependencies & Binary Toolchain Doctor",
+                        ecosystemSource = "TERMUX_BRIDGE",
+                        description = "Audits available shell binaries (sh, toybox, ping, curl, getprop, logcat) and checks Termux usr/bin environment paths.",
+                        executablePayload = "which sh toybox getprop ping top ps && getprop ro.product.cpu.abi",
+                        isApproved = true,
+                        usageCount = 3
+                    )
+                )
+                dao.insertClawSkill(
+                    ClawSkillEntity(
+                        skillKey = "openclaw_memory_consolidate",
+                        title = "OpenClaw MEMORY.md & Daily Log Consolidator",
+                        ecosystemSource = "OPENCLAW_MCP",
+                        description = "Reads current device state, active AI provider, and recent commands and appends a timestamped entry into MEMORY.md.",
+                        executablePayload = "MCP_TOOL:memory.append_fact",
+                        isApproved = true,
+                        usageCount = 5
+                    )
+                )
+                dao.insertClawSkill(
+                    ClawSkillEntity(
+                        skillKey = "openmuse_auto_dom_harvester",
+                        title = "OpenMuse Self-Improved Skill: Live DOM Action & Link Extractor",
+                        ecosystemSource = "OPENMUSE_SELF_IMPROVED",
+                        description = "Proposed by OpenMuse Intelligence after observing browser & screen automation patterns: extracts all interactive links, buttons, and inputs from the active page into a structured Space note.",
+                        executablePayload = "DOM_INSPECT:EXTRACT_INTERACTIVE_ELEMENTS",
+                        isApproved = false, // Waiting for manual user approval per OpenMuse Self-Improving Skills spec
+                        usageCount = 0
+                    )
+                )
+            }
+
+            if (dao.getAllClawGatewayChannelsOnce().isEmpty()) {
+                dao.insertClawGatewayChannel(
+                    ClawGatewayChannelEntity(
+                        channelType = "WEBCHAT_AG_UI",
+                        channelName = "OpenMuse AG-UI SSE & Local WebChat Gateway",
+                        endpointOrBotUrl = "http://127.0.0.1:9440/ag-ui/stream",
+                        isEnabled = true,
+                        messagesRoutedCount = 12,
+                        lastEventStatus = "AG-UI Event Stream Active (RUN_STARTED / STATE_DELTA / HITL_GATE)"
+                    )
+                )
+                dao.insertClawGatewayChannel(
+                    ClawGatewayChannelEntity(
+                        channelType = "TELEGRAM",
+                        channelName = "OpenClaw Telegram Bot Bridge",
+                        endpointOrBotUrl = "https://api.telegram.org/bot<TOKEN>/sendMessage",
+                        isEnabled = true,
+                        messagesRoutedCount = 0,
+                        lastEventStatus = "Ready (Enter Bot Token & Chat URL to dispatch live Telegram messages)"
+                    )
+                )
+                dao.insertClawGatewayChannel(
+                    ClawGatewayChannelEntity(
+                        channelType = "DISCORD",
+                        channelName = "OpenClaw Discord Webhook Relay",
+                        endpointOrBotUrl = "https://discord.com/api/webhooks/<ID>/<TOKEN>",
+                        isEnabled = true,
+                        messagesRoutedCount = 0,
+                        lastEventStatus = "Ready (Supports live HTTP POST webhook JSON payloads)"
+                    )
+                )
+                dao.insertClawGatewayChannel(
+                    ClawGatewayChannelEntity(
+                        channelType = "SLACK",
+                        channelName = "OpenDots & OpenClaw Slack Channels SDK",
+                        endpointOrBotUrl = "https://hooks.slack.com/services/<T00>/<B00>/<KEY>",
+                        isEnabled = true,
+                        messagesRoutedCount = 0,
+                        lastEventStatus = "Ready for Dot Coworker thread notifications & HITL approvals"
                     )
                 )
             }
