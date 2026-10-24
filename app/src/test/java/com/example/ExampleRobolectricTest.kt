@@ -258,6 +258,70 @@ class ExampleRobolectricTest {
         assertTrue(capabilities.any { it.id == "notification_listener" })
         assertTrue(capabilities.any { it.id == "termux_run_command" })
     }
+
+    @Test
+    fun verifyPerAgentCloudComputerProvisioningAndAutonomousExecution() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val deviceControl = DeviceControlEngine(context)
+        val termuxBridge = com.example.service.TermuxBridgeEngine(context)
+        val openEcosystem = com.example.domain.OpenAgentEcosystemEngine(context, deviceControl, termuxBridge)
+        val runtime = com.example.domain.AgentComputerRuntimeEngine(
+            context = context,
+            deviceControl = deviceControl,
+            termuxBridge = termuxBridge,
+            openEcosystem = openEcosystem
+        )
+
+        val grokBotComputer = com.example.data.local.AgentComputerEntity(
+            id = 1,
+            agentName = "GrokBot • Autonomous Operator",
+            vmHostname = "grokbot-vm-01",
+            personaRole = "Full-Stack Cloud Computer & Live Browser Operator",
+            computeBackend = "ISOLATED_LINUX_CONTAINER",
+            remoteCloudEndpoint = "",
+            encryptedCloudApiKey = "",
+            workspacePathOnDisk = "agent_computers/grokbot-vm-01",
+            activeBrowserUrl = "https://news.ycombinator.com",
+            activeBrowserTitle = "Hacker News",
+            isManualTakeover = false,
+            networkIsolationMode = "TOKEN_BROWSER_GATEWAY",
+            executionTimeoutSec = 30,
+            status = "ONLINE",
+            currentGoal = "Audit system kernel and generate architecture report"
+        )
+
+        // 1. Provision isolated filesystem volume (/workspace, /artifacts, /scripts, /logs)
+        val vmRoot = runtime.ensureComputerVolumeProvisioned(grokBotComputer)
+        assertTrue(vmRoot.exists())
+        val initialFiles = runtime.listFilesForComputer(grokBotComputer)
+        assertTrue(initialFiles.any { it.fileName == "vm_manifest.json" })
+        assertTrue(initialFiles.any { it.fileName == "vm_health_probe.sh" })
+        assertTrue(initialFiles.any { it.fileName == "system_readiness_report.md" })
+
+        // 2. Execute a real POSIX command scoped inside grokbot-vm-01/workspace
+        val receipt = runtime.executeCommandInAgentComputer(
+            computer = grokBotComputer,
+            rawCommand = "echo 'GROKBOT_VM_ISOLATED_EXEC_OK' && pwd"
+        )
+        assertEquals(0, receipt.exitCode)
+        assertTrue(receipt.output.contains("GROKBOT_VM_ISOLATED_EXEC_OK"))
+        assertTrue(receipt.workingDir.contains("grokbot-vm-01"))
+
+        // 3. Execute an autonomous multi-step goal that generates a real deliverable artifact on disk
+        val (updatedVm, goalReceipt) = runtime.executeAutonomousGoalOnComputer(
+            computer = grokBotComputer,
+            goalPrompt = "Verify isolated agent computer telemetry and produce deliverable artifact"
+        )
+        assertEquals("ONLINE", updatedVm.status)
+        assertEquals(0, goalReceipt.exitCode)
+        val decodedSteps = runtime.decodePlanSteps(updatedVm.planStepsJson)
+        assertEquals(4, decodedSteps.size)
+        assertTrue(decodedSteps.all { it.status == "COMPLETED" })
+
+        val filesAfterGoal = runtime.listFilesForComputer(updatedVm)
+        assertTrue(filesAfterGoal.any { it.folderCategory == "artifacts" && it.fileName.startsWith("deliverable_") })
+    }
 }
+
 
 

@@ -198,5 +198,22 @@ interface AetherDao {
 
     @Query("DELETE FROM claw_gateway_channels WHERE id = :id")
     suspend fun deleteClawGatewayChannel(id: Int)
+
+    // Dedicated Per-Agent Cloud & Sandbox Computers (MetaMuse / GrokBot / OpenBot Architecture)
+    @Query("SELECT * FROM agent_computers ORDER BY id ASC")
+    fun observeAgentComputers(): Flow<List<AgentComputerEntity>>
+
+    @Query("SELECT * FROM agent_computers")
+    suspend fun getAllAgentComputersOnce(): List<AgentComputerEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAgentComputer(computer: AgentComputerEntity): Long
+
+    @Update
+    suspend fun updateAgentComputer(computer: AgentComputerEntity)
+
+    @Query("DELETE FROM agent_computers WHERE id = :id")
+    suspend fun deleteAgentComputer(id: Int)
 }
+
 

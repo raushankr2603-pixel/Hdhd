@@ -194,3 +194,35 @@ data class ClawGatewayChannelEntity(
     val lastEventStatus: String = "Gateway Standby"
 )
 
+/**
+ * Dedicated Cloud / Sandbox Computer assigned to an individual AI Agent (MetaMuse / GrokBot / OpenBot architecture).
+ * Each AgentComputerEntity has its own isolated on-disk Linux/POSIX directory volume, persistent Browser Worker state,
+ * terminal execution receipts, network policy, and optional remote Cloud VM endpoint.
+ */
+@Entity(tableName = "agent_computers")
+data class AgentComputerEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val agentName: String,
+    val vmHostname: String,
+    val personaRole: String,
+    val computeBackend: String = "ISOLATED_LINUX_CONTAINER", // "ISOLATED_LINUX_CONTAINER", "CLOUD_VM_BRIDGE", "TERMUX_USERLAND_VM"
+    val remoteCloudEndpoint: String = "", // Optional HTTP/WebSocket remote container endpoint (E2B / Docker / Daytona / Custom)
+    val encryptedCloudApiKey: String = "",
+    val workspacePathOnDisk: String = "",
+    val activeBrowserUrl: String = "https://github.com/CopilotKit/OpenMuse",
+    val activeBrowserTitle: String = "OpenMuse Agent Computer Viewport",
+    val isManualTakeover: Boolean = false,
+    val networkIsolationMode: String = "TOKEN_BROWSER_GATEWAY", // "TOKEN_BROWSER_GATEWAY" or "UNRESTRICTED_BRIDGE"
+    val executionTimeoutSec: Int = 30,
+    val status: String = "ONLINE", // "ONLINE", "EXECUTING", "MANUAL_TAKEOVER", "AWAITING_HITL"
+    val currentGoal: String = "Ready for autonomous multi-step computer workflow",
+    val planStepsJson: String = "[]",
+    val lastTerminalReceipt: String = "VM initialized • Exit Code 0",
+    val artifactsCount: Int = 2,
+    val commandsExecutedCount: Int = 1,
+    val cpuLoadPercent: Int = 12,
+    val memoryUsedMb: Int = 148,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+

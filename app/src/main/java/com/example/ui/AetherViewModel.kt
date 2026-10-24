@@ -6,6 +6,7 @@ import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AetherDatabase
+import com.example.data.local.AgentComputerEntity
 import com.example.data.local.AiProviderEntity
 import com.example.data.local.ClawGatewayChannelEntity
 import com.example.data.local.ClawSkillEntity
@@ -18,6 +19,9 @@ import com.example.data.local.SubAgentEntity
 import com.example.data.local.VoiceMacroEntity
 import com.example.data.security.E2EEVault
 import com.example.domain.AgUiProtocolEvent
+import com.example.domain.AgentComputerFileItem
+import com.example.domain.AgentComputerRuntimeEngine
+import com.example.domain.AgentTerminalReceipt
 import com.example.domain.AiRouterEngine
 import com.example.domain.AutonomousMacroRunState
 import com.example.domain.BrowserDomInspectionResult
@@ -76,6 +80,7 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
     val permissionCenter = PermissionCenterManager(application)
     val termuxBridge = TermuxBridgeEngine(application)
     val openEcosystem = OpenAgentEcosystemEngine(application, deviceControl, termuxBridge)
+    val computerRuntime = AgentComputerRuntimeEngine(application, deviceControl, termuxBridge, openEcosystem)
     private val aiRouter = AiRouterEngine(deviceControl)
 
     val voiceManager = VoiceLiveManager(application) { spokenText, confidence ->
@@ -115,6 +120,15 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
 
     val clawGatewayChannels: StateFlow<List<ClawGatewayChannelEntity>> = dao.observeClawGatewayChannels()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val agentComputers: StateFlow<List<AgentComputerEntity>> = dao.observeAgentComputers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedComputerFiles = MutableStateFlow<List<AgentComputerFileItem>>(emptyList())
+    val selectedComputerFiles: StateFlow<List<AgentComputerFileItem>> = _selectedComputerFiles.asStateFlow()
+
+    private val _lastAgentTerminalReceipt = MutableStateFlow<AgentTerminalReceipt?>(null)
+    val lastAgentTerminalReceipt: StateFlow<AgentTerminalReceipt?> = _lastAgentTerminalReceipt.asStateFlow()
 
     val agUiEvents: StateFlow<List<AgUiProtocolEvent>> = openEcosystem.agUiEvents
     val browserState: StateFlow<BrowserDomInspectionResult> = openEcosystem.browserState
@@ -205,6 +219,16 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
     init {
         viewModelScope.launch(Dispatchers.IO) {
             AetherDatabase.seedDefaultsIfEmpty(dao)
+            val allComputers = dao.getAllAgentComputersOnce()
+            allComputers.forEach { comp ->
+                val vmRoot = computerRuntime.ensureComputerVolumeProvisioned(comp)
+                if (comp.workspacePathOnDisk.isEmpty()) {
+                    dao.updateAgentComputer(comp.copy(workspacePathOnDisk = vmRoot.absolutePath))
+                }
+            }
+            allComputers.firstOrNull()?.let { firstComp ->
+                _selectedComputerFiles.value = computerRuntime.listFilesForComputer(firstComp)
+            }
             _installedApps.value = deviceControl.getInstalledApps()
             refreshDiagnostics()
             refreshPermissionsStatus()
@@ -1308,6 +1332,214 @@ class AetherViewModel(application: Application) : AndroidViewModel(application) 
     fun deleteGatewayChannel(id: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deleteClawGatewayChannel(id)
+        }
+    }
+
+    // =========================================================================
+    // DEDICATED PER-AGENT CLOUD & SANDBOX COMPUTERS (METAMUSE / GROKBOT / OPENBOT)
+    // =========================================================================
+
+    fun refreshComputerFiles(computer: AgentComputerEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _selectedComputerFiles.value = computerRuntime.listFilesForComputer(computer)
+        }
+    }
+
+    fun spawnAgentWithCloudComputer(
+        agentName: String,
+        personaRole: String,
+        computeBackend: String = "ISOLATED_LINUX_CONTAINER",
+        remoteCloudEndpoint: String = "",
+        rawCloudApiKey: String = "",
+        initialBrowserUrl: String = "https://github.com/CopilotKit/OpenMuse"
+    ) {
+        val cleanName = agentName.trim()
+        if (cleanName.isEmpty()) {
+            postToast("Enter a name for the new Agent & its Cloud Computer")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val hostSlug = cleanName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(16)
+            val hostname = "${hostSlug.ifEmpty { "agent" }}-vm-${(10..99).random()}"
+            val encryptedKey = if (rawCloudApiKey.isNotBlank()) E2EEVault.encrypt(rawCloudApiKey.trim()) else ""
+            val tempEntity = AgentComputerEntity(
+                agentName = cleanName,
+                vmHostname = hostname,
+                personaRole = personaRole.ifBlank { "Autonomous Full-Stack & Browser Worker Agent" },
+                computeBackend = computeBackend,
+                remoteCloudEndpoint = remoteCloudEndpoint.trim(),
+                encryptedCloudApiKey = encryptedKey,
+                activeBrowserUrl = initialBrowserUrl.ifBlank { "https://github.com/CopilotKit/OpenMuse" },
+                activeBrowserTitle = "$cleanName Browser Viewport",
+                status = "ONLINE",
+                currentGoal = "Provisioned dedicated Agent Computer ($hostname) with isolated /workspace & /artifacts",
+                planStepsJson = """[{"step":1,"title":"Provision Isolated VM Volume ($hostname)","status":"COMPLETED"},{"step":2,"title":"Initialize Token-Protected Browser Worker","status":"COMPLETED"},{"step":3,"title":"Mount /workspace & /artifacts Directories","status":"COMPLETED"}]"""
+            )
+            val vmRoot = computerRuntime.ensureComputerVolumeProvisioned(tempEntity)
+            val savedId = dao.insertAgentComputer(tempEntity.copy(workspacePathOnDisk = vmRoot.absolutePath)).toInt()
+            val savedEntity = tempEntity.copy(id = savedId, workspacePathOnDisk = vmRoot.absolutePath)
+            _selectedComputerFiles.value = computerRuntime.listFilesForComputer(savedEntity)
+
+            // Also register in sub_agents so the multi-agent tree stays synchronized
+            dao.insertSubAgent(
+                SubAgentEntity(
+                    name = cleanName,
+                    role = "${tempEntity.personaRole} [VM: $hostname]",
+                    parentAgentName = "Muse Computer Hypervisor",
+                    generationDepth = 1,
+                    status = "RUNNING",
+                    currentTask = "Dedicated Cloud Computer online at ${vmRoot.absolutePath}",
+                    cpuAllocationPercent = 16,
+                    stepsCompleted = 3,
+                    totalSteps = 4
+                )
+            )
+            postToast("Provisioned Agent Computer '$hostname' for $cleanName")
+        }
+    }
+
+    fun executeCommandOnAgentComputer(computer: AgentComputerEntity, command: String) {
+        val clean = command.trim()
+        if (clean.isEmpty()) {
+            postToast("Enter a command to execute in ${computer.vmHostname}")
+            return
+        }
+        viewModelScope.launch {
+            dao.updateAgentComputer(computer.copy(status = "EXECUTING"))
+            val receipt = computerRuntime.executeCommandInAgentComputer(computer, clean)
+            _lastAgentTerminalReceipt.value = receipt
+            val allFiles = computerRuntime.listFilesForComputer(computer)
+            _selectedComputerFiles.value = allFiles
+            val updated = computer.copy(
+                status = "ONLINE",
+                lastTerminalReceipt = "${receipt.receiptId} • exit=${receipt.exitCode} • ${receipt.elapsedMs}ms",
+                commandsExecutedCount = computer.commandsExecutedCount + 1,
+                artifactsCount = allFiles.count { it.folderCategory == "artifacts" },
+                updatedAt = System.currentTimeMillis()
+            )
+            dao.updateAgentComputer(updated)
+            dao.insertShellEntry(
+                ShellHistoryEntity(
+                    command = "[${computer.vmHostname}] $clean",
+                    output = receipt.output,
+                    isRootAttempt = false,
+                    exitCode = receipt.exitCode
+                )
+            )
+            postToast("${computer.vmHostname}: ${receipt.receiptId} (exit ${receipt.exitCode}, ${receipt.elapsedMs}ms)")
+        }
+    }
+
+    fun runAutonomousGoalOnAgentComputer(computer: AgentComputerEntity, goalPrompt: String) {
+        viewModelScope.launch {
+            dao.updateAgentComputer(
+                computer.copy(
+                    status = "EXECUTING",
+                    currentGoal = goalPrompt.ifBlank { computer.currentGoal }
+                )
+            )
+            val (updatedComputer, receipt) = computerRuntime.executeAutonomousGoalOnComputer(computer, goalPrompt)
+            dao.updateAgentComputer(updatedComputer)
+            _lastAgentTerminalReceipt.value = receipt
+            _selectedComputerFiles.value = computerRuntime.listFilesForComputer(updatedComputer)
+            postToast("${computer.agentName} completed goal on ${computer.vmHostname} & wrote deliverable artifact!")
+        }
+    }
+
+    fun toggleAgentComputerManualTakeover(computer: AgentComputerEntity, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = computer.copy(
+                isManualTakeover = enabled,
+                status = if (enabled) "MANUAL_TAKEOVER" else "ONLINE",
+                updatedAt = System.currentTimeMillis()
+            )
+            dao.updateAgentComputer(updated)
+            openEcosystem.setBrowserManualTakeover(enabled)
+            postToast(
+                if (enabled) "Take Control ACTIVE on ${computer.vmHostname}: Direct user browser & terminal control"
+                else "Handed control back to ${computer.agentName} (${computer.vmHostname})"
+            )
+        }
+    }
+
+    fun updateAgentComputerBrowserState(computer: AgentComputerEntity, url: String, title: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.updateAgentComputer(
+                computer.copy(
+                    activeBrowserUrl = url.ifBlank { computer.activeBrowserUrl },
+                    activeBrowserTitle = title.ifBlank { computer.activeBrowserTitle },
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun updateAgentComputerCloudConfig(
+        computer: AgentComputerEntity,
+        computeBackend: String,
+        remoteEndpoint: String,
+        rawApiKey: String,
+        networkIsolationMode: String,
+        timeoutSec: Int
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val encryptedKey = if (rawApiKey.isNotBlank()) {
+                E2EEVault.encrypt(rawApiKey.trim())
+            } else {
+                computer.encryptedCloudApiKey
+            }
+            val updated = computer.copy(
+                computeBackend = computeBackend,
+                remoteCloudEndpoint = remoteEndpoint.trim(),
+                encryptedCloudApiKey = encryptedKey,
+                networkIsolationMode = networkIsolationMode,
+                executionTimeoutSec = timeoutSec.coerceIn(5, 120),
+                updatedAt = System.currentTimeMillis()
+            )
+            dao.updateAgentComputer(updated)
+            postToast("Updated Cloud/Container config for ${computer.vmHostname}")
+        }
+    }
+
+    fun saveFileInAgentComputer(
+        computer: AgentComputerEntity,
+        folderCategory: String,
+        fileName: String,
+        content: String
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            computerRuntime.writeFileInComputer(computer, folderCategory, fileName, content)
+            val allFiles = computerRuntime.listFilesForComputer(computer)
+            _selectedComputerFiles.value = allFiles
+            dao.updateAgentComputer(
+                computer.copy(
+                    artifactsCount = allFiles.count { it.folderCategory == "artifacts" },
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            postToast("Saved $folderCategory/$fileName in ${computer.vmHostname}")
+        }
+    }
+
+    fun deleteFileInAgentComputer(computer: AgentComputerEntity, relativePath: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            computerRuntime.deleteFileInComputer(computer, relativePath)
+            val allFiles = computerRuntime.listFilesForComputer(computer)
+            _selectedComputerFiles.value = allFiles
+            dao.updateAgentComputer(
+                computer.copy(
+                    artifactsCount = allFiles.count { it.folderCategory == "artifacts" },
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            postToast("Deleted $relativePath from ${computer.vmHostname}")
+        }
+    }
+
+    fun deleteAgentComputer(id: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deleteAgentComputer(id)
+            postToast("Removed Agent Computer #$id")
         }
     }
 

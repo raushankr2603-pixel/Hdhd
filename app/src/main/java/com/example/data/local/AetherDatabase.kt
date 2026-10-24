@@ -19,9 +19,10 @@ import com.example.domain.MacroSequenceCodec
         OpenDotsCoworkerEntity::class,
         OpenDotsSpacePageEntity::class,
         ClawSkillEntity::class,
-        ClawGatewayChannelEntity::class
+        ClawGatewayChannelEntity::class,
+        AgentComputerEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AetherDatabase : RoomDatabase() {
@@ -473,6 +474,89 @@ abstract class AetherDatabase : RoomDatabase() {
                         isEnabled = true,
                         messagesRoutedCount = 0,
                         lastEventStatus = "Ready for Dot Coworker thread notifications & HITL approvals"
+                    )
+                )
+            }
+
+            if (dao.getAllAgentComputersOnce().isEmpty()) {
+                dao.insertAgentComputer(
+                    AgentComputerEntity(
+                        agentName = "GrokBot • Autonomous Software & Cloud Engineer",
+                        vmHostname = "grokbot-vm-01",
+                        personaRole = "Full-Stack Code Execution, Shell Automation & Cloud Container Architect",
+                        computeBackend = "ISOLATED_LINUX_CONTAINER",
+                        activeBrowserUrl = "https://github.com/openclaw/openclaw",
+                        activeBrowserTitle = "GrokBot Browser Worker • OpenClaw Repository",
+                        networkIsolationMode = "TOKEN_BROWSER_GATEWAY",
+                        executionTimeoutSec = 30,
+                        status = "ONLINE",
+                        currentGoal = "Autonomous repository inspection, shell diagnostics & build artifact generation",
+                        planStepsJson = """[{"step":1,"title":"Provision Isolated VM Workspace & Environment","status":"COMPLETED"},{"step":2,"title":"Inspect Target Repository DOM via Token-Protected Browser","status":"COMPLETED"},{"step":3,"title":"Execute POSIX Kernel & Toolchain Verification in VM","status":"COMPLETED"},{"step":4,"title":"Write Verified Deliverable Artifact to /artifacts","status":"COMPLETED"}]""",
+                        lastTerminalReceipt = "Receipt #GB-101 • exit=0 • 14ms • /workspace/grokbot_audit.sh",
+                        artifactsCount = 3,
+                        commandsExecutedCount = 6,
+                        cpuLoadPercent = 18,
+                        memoryUsedMb = 212
+                    )
+                )
+                dao.insertAgentComputer(
+                    AgentComputerEntity(
+                        agentName = "MetaMuse • Deep Web & Multimodal Research Agent",
+                        vmHostname = "metamuse-vm-02",
+                        personaRole = "Persistent Chromium Browser Worker, DOM Form Automation & Knowledge Synthesis",
+                        computeBackend = "ISOLATED_LINUX_CONTAINER",
+                        activeBrowserUrl = "https://github.com/CopilotKit/OpenMuse",
+                        activeBrowserTitle = "MetaMuse Secure VM • CopilotKit/OpenMuse",
+                        networkIsolationMode = "TOKEN_BROWSER_GATEWAY",
+                        executionTimeoutSec = 30,
+                        status = "ONLINE",
+                        currentGoal = "Stream AG-UI research cards, extract live DOM nodes, and compile executive briefs",
+                        planStepsJson = """[{"step":1,"title":"Initialize MetaMuse Secure VM & Chromium Profile","status":"COMPLETED"},{"step":2,"title":"Extract Interactive DOM Nodes & Headings","status":"COMPLETED"},{"step":3,"title":"Synthesize Structured Markdown Brief in VM Volume","status":"COMPLETED"}]""",
+                        lastTerminalReceipt = "Receipt #MM-204 • exit=0 • 19ms • DOM Harvest Complete",
+                        artifactsCount = 3,
+                        commandsExecutedCount = 5,
+                        cpuLoadPercent = 14,
+                        memoryUsedMb = 184
+                    )
+                )
+                dao.insertAgentComputer(
+                    AgentComputerEntity(
+                        agentName = "AnyClaw • Termux & Linux Kernel DevOps Agent",
+                        vmHostname = "anyclaw-vm-03",
+                        personaRole = "Termux RunCommandService Bridge, MCP Server Host & System Optimizer",
+                        computeBackend = "TERMUX_USERLAND_VM",
+                        activeBrowserUrl = "https://github.com/fastclaw-ai/anyclaw",
+                        activeBrowserTitle = "AnyClaw Mobile Linux & MCP Runtime",
+                        networkIsolationMode = "UNRESTRICTED_BRIDGE",
+                        executionTimeoutSec = 30,
+                        status = "ONLINE",
+                        currentGoal = "Manage Termux sub-dependencies, MEMORY.md/SOUL.md sync & POSIX automation",
+                        planStepsJson = """[{"step":1,"title":"Mount Termux & Local POSIX Userland Volume","status":"COMPLETED"},{"step":2,"title":"Probe 16 System & Termux Binaries","status":"COMPLETED"},{"step":3,"title":"Sync MEMORY.md & SOUL.md into Agent VM","status":"COMPLETED"}]""",
+                        lastTerminalReceipt = "Receipt #AC-309 • exit=0 • 11ms • POSIX Toolchain Verified",
+                        artifactsCount = 2,
+                        commandsExecutedCount = 8,
+                        cpuLoadPercent = 11,
+                        memoryUsedMb = 156
+                    )
+                )
+                dao.insertAgentComputer(
+                    AgentComputerEntity(
+                        agentName = "OpenDots • Collaborative Spaces & HITL Architect",
+                        vmHostname = "opendots-vm-04",
+                        personaRole = "Multi-Agent Workspace Coordinator & Human-in-the-Loop Document Publisher",
+                        computeBackend = "ISOLATED_LINUX_CONTAINER",
+                        activeBrowserUrl = "https://github.com/CopilotKit/OpenDots",
+                        activeBrowserTitle = "OpenDots Multi-Agent Workspace",
+                        networkIsolationMode = "TOKEN_BROWSER_GATEWAY",
+                        executionTimeoutSec = 30,
+                        status = "ONLINE",
+                        currentGoal = "Coordinate specialist Dots and enforce Human-in-the-Loop (HITL) approval gates",
+                        planStepsJson = """[{"step":1,"title":"Initialize OpenBot Sandbox Volume","status":"COMPLETED"},{"step":2,"title":"Verify Spaces & Pages On-Disk Directory","status":"COMPLETED"},{"step":3,"title":"Enforce HITL Checkpoints on Non-Read-Only Tools","status":"COMPLETED"}]""",
+                        lastTerminalReceipt = "Receipt #OD-402 • exit=0 • 9ms • Spaces Volume Mounted",
+                        artifactsCount = 2,
+                        commandsExecutedCount = 4,
+                        cpuLoadPercent = 9,
+                        memoryUsedMb = 140
                     )
                 )
             }

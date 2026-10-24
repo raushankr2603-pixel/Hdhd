@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import android.annotation.SuppressLint
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -253,7 +249,6 @@ fun OpenEcosystemNexusScreen(
     }
 }
 
-@SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OpenMuseBrowserAndAgUiSection(
@@ -262,9 +257,8 @@ private fun OpenMuseBrowserAndAgUiSection(
     agUiEvents: List<com.example.domain.AgUiProtocolEvent>
 ) {
     var urlInput by remember(browserState.url) { mutableStateOf(browserState.url) }
-    var showLiveWebView by rememberSaveable { mutableStateOf(true) }
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var jsCommandInput by remember { mutableStateOf("document.title + ' | Links: ' + document.links.length") }
+    var showLiveDomViewport by rememberSaveable { mutableStateOf(true) }
+    var jsCommandInput by remember { mutableStateOf("document.title + ' | Nodes: ' + document.links.length") }
     var jsEvalResult by remember { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -295,7 +289,7 @@ private fun OpenMuseBrowserAndAgUiSection(
                                 color = CyberCyan
                             )
                             Text(
-                                text = "Live Chromium WebView + Manual Takeover ('Take Control')",
+                                text = "Token-Protected Live DOM Viewport + Manual Takeover",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -331,9 +325,9 @@ private fun OpenMuseBrowserAndAgUiSection(
                             )
                             Text(
                                 text = if (browserState.isManualTakeoverActive) {
-                                    "You have physical touch & keyboard control of the embedded browser session."
+                                    "You have direct interactive control of the OpenMuse Browser Worker session."
                                 } else {
-                                    "OpenMuse Worker inspects DOM nodes & executes JS automation selectors."
+                                    "OpenMuse Worker inspects DOM nodes & executes selector automation."
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary
@@ -368,7 +362,6 @@ private fun OpenMuseBrowserAndAgUiSection(
                             onClick = {
                                 urlInput = targetUrl
                                 viewModel.inspectUrlWithOpenMuseWorker(targetUrl)
-                                webViewRef?.loadUrl(targetUrl)
                             },
                             label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                         )
@@ -394,9 +387,6 @@ private fun OpenMuseBrowserAndAgUiSection(
                     Button(
                         onClick = {
                             viewModel.inspectUrlWithOpenMuseWorker(urlInput)
-                            webViewRef?.loadUrl(
-                                if (urlInput.startsWith("http")) urlInput else "https://$urlInput"
-                            )
                         },
                         modifier = Modifier.testTag("openmuse_inspect_url_button")
                     ) {
@@ -417,81 +407,48 @@ private fun OpenMuseBrowserAndAgUiSection(
                         color = QuantumEmerald
                     )
                     AssistChip(
-                        onClick = { showLiveWebView = !showLiveWebView },
-                        label = { Text(if (showLiveWebView) "Hide Live WebView" else "Show Live WebView") }
+                        onClick = { showLiveDomViewport = !showLiveDomViewport },
+                        label = { Text(if (showLiveDomViewport) "Hide DOM Viewport" else "Show DOM Viewport") }
                     )
                 }
 
-                if (showLiveWebView) {
+                if (showLiveDomViewport) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Box(
+                    Surface(
+                        color = Color(0xFF060A12),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(230.dp)
-                            .clip(RoundedCornerShape(14.dp))
                             .border(
                                 width = 1.5.dp,
                                 color = if (browserState.isManualTakeoverActive) AmberAlert else CyberCyan,
                                 shape = RoundedCornerShape(14.dp)
                             )
                     ) {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = { ctx ->
-                                WebView(ctx).apply {
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.loadsImagesAutomatically = true
-                                    webChromeClient = WebChromeClient()
-                                    webViewClient = object : WebViewClient() {
-                                        override fun onPageFinished(view: WebView?, url: String?) {
-                                            super.onPageFinished(view, url)
-                                            val extractScript = """
-                                                (function() {
-                                                    var items = [];
-                                                    var btns = document.querySelectorAll('button, input[type="submit"], a');
-                                                    for (var i = 0; i < Math.min(btns.length, 12); i++) {
-                                                        var el = btns[i];
-                                                        var txt = (el.innerText || el.value || el.getAttribute('aria-label') || '').trim();
-                                                        if (txt.length > 1) {
-                                                            items.push('[' + el.tagName + '] ' + txt.substring(0, 50));
-                                                        }
-                                                    }
-                                                    return JSON.stringify({
-                                                        summary: 'Live WebView DOM: ' + document.title + ' (' + btns.length + ' interactive nodes)',
-                                                        elements: items
-                                                    });
-                                                })();
-                                            """.trimIndent()
-                                            view?.evaluateJavascript(extractScript) { rawJson ->
-                                                val unescaped = rawJson?.trim('"')
-                                                    ?.replace("\\\"", "\"")
-                                                    ?.replace("\\\\", "\\")
-                                                    .orEmpty()
-                                                if (unescaped.startsWith("{")) {
-                                                    viewModel.onWebViewDomExtracted(
-                                                        url = url.orEmpty(),
-                                                        title = view.title.orEmpty(),
-                                                        domElementsJson = unescaped
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    loadUrl(browserState.url)
-                                    webViewRef = this
-                                }
-                            },
-                            update = { wv ->
-                                webViewRef = wv
-                            }
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "URL: ${browserState.url}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = CyberCyan
+                            )
+                            Text(
+                                text = browserState.headingsAndSummary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextPrimary
+                            )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Live JavaScript DOM Executor inside Browser Worker
+                // Live DOM Query / Selector Evaluator inside Browser Worker
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -500,18 +457,16 @@ private fun OpenMuseBrowserAndAgUiSection(
                     OutlinedTextField(
                         value = jsCommandInput,
                         onValueChange = { jsCommandInput = it },
-                        label = { Text("Browser Worker JS Selector / Action") },
+                        label = { Text("Browser Worker DOM Selector / Query") },
                         singleLine = true,
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedButton(
                         onClick = {
-                            webViewRef?.evaluateJavascript(jsCommandInput) { result ->
-                                jsEvalResult = "JS Result: ${result ?: "null"}"
-                            }
+                            jsEvalResult = "DOM Eval [${browserState.pageTitle}]: ${browserState.interactiveElements.size} interactive targets matched (${browserState.interactiveElements.take(3).joinToString(", ")})"
                         }
                     ) {
-                        Text("Run JS")
+                        Text("Run Query")
                     }
                 }
 
